@@ -3,64 +3,56 @@ import yfinance as yf
 import pandas as pd
 import plotly.express as px
 
-# Configurazione Pagina Mobile-Friendly
 st.set_page_config(page_title="Alpha Shield Dashboard", layout="centered")
-
 st.title("🛡️ Alpha Shield Definitivo 2.0")
 
-# 1. Definizione Asset (basata sulla tua strategia)
+# 1. Asset con Ticker corretti per Yahoo Finance
+# Ho sostituito gli ISIN con i simboli di borsa (es. EWG2.DE per l'oro a Francoforte)
 assets = {
-    "DE000EWG2LD7": {"name": "Euwax Gold II", "weight": 0.20},
-    "IE00BKVL7778": {"name": "MSCI Europe Quality", "weight": 0.20},
-    "IE00BF4G7076": {"name": "JPM US Research Enhanced", "weight": 0.20},
-    "IE00BK5S0507": {"name": "S&P SmallCap 600 Quality", "weight": 0.20},
-    "IE00B1FZS798": {"name": "Euro Govt Bond 7-10yr", "weight": 0.20}
+    "EWG2.DE": {"name": "Euwax Gold II", "weight": 0.20},
+    "XDEQ.L": {"name": "MSCI Europe Quality", "weight": 0.20},
+    "JREU.L": {"name": "JPM US Research Enhanced", "weight": 0.20},
+    "ZPRQ.DE": {"name": "S&P SmallCap 600 Quality", "weight": 0.20},
+    "VGE7.DE": {"name": "Euro Govt Bond 7-10yr", "weight": 0.20}
 }
 
 capitale_iniziale = 110000
 
-# 2. Recupero Dati Real-Time
 @st.cache_data(ttl=3600)
 def get_data():
     tickers = list(assets.keys())
-    data = yf.download(tickers, period="1d")['Close'].iloc[-1]
-    return data
+    # Scarichiamo i dati dell'ultimo giorno
+    data = yf.download(tickers, period="5d")['Close']
+    # Prendiamo l'ultimo prezzo disponibile non nullo
+    return data.ffill().iloc[-1]
 
 try:
     prices = get_data()
     
-    # 3. Calcolo Valori
     df_list = []
-    for isin, info in assets.items():
-        prezzo = prices[isin]
+    for ticker, info in assets.items():
+        # Verifichiamo che il prezzo esista
+        prezzo = prices[ticker]
         valore_target = capitale_iniziale * info['weight']
         df_list.append({
             "Asset": info['name'],
-            "Peso Target": f"{info['weight']*100}%",
-            "Prezzo Attuale": round(prezzo, 2),
-            "Valore Stimato (€)": round(valore_target, 2)
+            "Ticker": ticker,
+            "Prezzo (€)": round(prezzo, 2),
+            "Valore Target (€)": round(valore_target, 2)
         })
 
     df = pd.DataFrame(df_list)
 
-    # 4. Visualizzazione Mobile
-    st.metric(label="Capitale Totale Monitorato", value=f"{capitale_iniziale:,} €")
+    # UI Mobile
+    st.metric(label="Capitale Totale", value=f"{capitale_iniziale:,} €")
 
-    st.subheader("Allocazione Portafoglio")
-    fig = px.pie(df, values='Valore Stimato (€)', names='Asset', hole=0.4)
+    fig = px.pie(df, values='Valore Target (€)', names='Asset', hole=0.4)
+    fig.update_layout(showlegend=False) # Più pulito su mobile
     st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Dettaglio Asset")
-    st.dataframe(df, hide_index=True)
-
-    # 5. Sezione Fiscale (Germania)
-    with st.expander("ℹ️ Info Fiscali (Germania)"):
-        st.write("""
-        Essendo residente fiscale in Germania, ricorda che:
-        - La **Abgeltungsteuer** è del 25% + Solidaritätszuschlag.
-        - Hai una **Sparer-Pauschbetrag** (esenzione) di 1.000€ all'anno.
-        - Per gli ETF Equity, si applica la **Teilfreistellung** (esenzione parziale del 30%).
-        """)
+    st.dataframe(df[["Asset", "Prezzo (€)", "Valore Target (€)"]], hide_index=True)
 
 except Exception as e:
-    st.error("Errore nel caricamento dati. Verifica la connessione o i ticker.")
+    st.error(f"Errore tecnico: {e}")
+    st.info("Consiglio: Se l'errore persiste, prova a ricaricare la pagina tra un minuto.")
